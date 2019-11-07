@@ -1,0 +1,31 @@
+packages_to_install:
+  - httpd
+  - samba
+  - nfs-utils
+
+samba_vars:
+  samba_users:
+    - sambauser1
+    - sambauser2
+    - sambauser3
+
+nfs_export: /nfs_export
+
+httpd_vars:
+  httpd_document_root: /webserver/www/html
+  httpd_port: 8081
+  httpd_selinux_regexp: "/webserver(/.*)?"
+
+services_to_start:
+  - httpd
+  - smb
+  - nfs-utils
+  - rpcbind
+
+services_to_firewalld:
+  - samba
+  - nfs
+  - rpc-bind
+  - mountd
+
+

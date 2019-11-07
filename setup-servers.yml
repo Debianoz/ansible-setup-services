@@ -1,0 +1,113 @@
+---
+- name: Install packages and configure services
+  become: True
+  hosts: servers
+  vars_files:
+    - vars/servers-vars.yml
+  tasks:
+    - name: Install packages
+      yum:
+        name: "{{ packages_to_install }}"
+        state: present
+
+    - name: Configure Apache -> DocumentRoot (1)
+      lineinfile:
+       dest: /etc/httpd/conf/httpd.conf
+       regexp: '^DocumentRoot "/var/www/html"'
+       line: 'DocumentRoot "{{ httpd_vars.httpd_document_root}}"'
+       state: present
+
+    - name: Configure Apache -> DocumentRoot (2)
+      lineinfile:
+        dest: /etc/httpd/conf/httpd.conf
+        regexp: '^<Directory "/var/www">'
+        line: '<Directory "{{ httpd_vars.httpd_document_root}}">'
+        state: present
+
+    - name: Configure Apache -> DocumentRoot (2)
+      lineinfile:
+       dest: /etc/httpd/conf/httpd.conf
+       regexp: '^<Directory "/var/www/html">'
+       line: '<Directory "{{ httpd_vars.httpd_document_root}}">'
+       state: present
+
+    - name: Configure Apache -> Create DocumentRoot dir
+      file:
+        path: "{{ httpd_vars.httpd_document_root }}"
+        state: directory
+
+    - name: Configure Apache -> Listen Port
+      lineinfile:
+        dest: /etc/httpd/conf/httpd.conf
+        regexp: "^Listen 80"
+        line: "Listen {{ httpd_vars.httpd_port }}"
+        state: present
+
+    - name: Configure Nfs-Server -> Create dir to export
+      file:
+        path: "{{ nfs_export }}"
+        state: directory
+
+    - name: Configure Nfs-Server -> Export fs
+      lineinfile:
+        path: /etc/exports
+        line: '"{{ nfs_export }}" *()'
+
+
+- name: Configure SELinux
+  hosts: servers
+  become: True
+  vars_files:
+    - vars/servers-vars.yml
+  tasks:
+    - name: Configure Selinux for Apache Listen Port
+      seport:
+        ports: "{{ httpd_vars.httpd_port }}"
+        proto: tcp
+        setype: http_port_t
+        state: present
+
+    - name: Configure Selinux for Apache DocumentRoot
+      sefcontext:
+        target: "{{ httpd_vars.httpd_selinux_regexp }}"
+        setype: httpd_sys_rw_content_t 
+        state: present
+
+    - name: Restore SELinux fcontext
+      shell: restorecon -R /webserver
+
+- name: Configure Firewalld
+  hosts: servers
+  become: True
+  vars_files:
+    - vars/servers-vars.yml
+  tasks:
+   - name: Configure Apache firewalld rules
+     firewalld:
+       port: "{{ httpd_vars.httpd_port }}/tcp"
+       permanent: yes
+       immediate: yes
+       state: enabled
+
+   - name: Add services to firewalld 
+     firewalld:
+       service: "{{ item }}"
+       permanent: yes
+       immediate: yes
+       state: enabled
+     with_items:
+        - "{{ services_to_firewalld }}"
+
+- name: Start all services
+  hosts: servers 
+  vars_files:
+    - vars/servers-vars.yml
+  become: True
+  tasks:
+    - name: Start all required services
+      service:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      with_items:
+        - "{{ services_to_start }}"
